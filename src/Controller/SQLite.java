@@ -1,20 +1,33 @@
 package Controller;
 
+import Model.User;
 import Model.History;
 import Model.Logs;
 import Model.Product;
-import Model.User;
-import java.sql.Connection;
-import java.sql.DatabaseMetaData;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.Statement;
+import java.sql.*;
 import java.util.ArrayList;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.util.Base64;
 
 public class SQLite {
     
     public int DEBUG_MODE = 0;
     String driverURL = "jdbc:sqlite:" + "database.db";
+       private static final String DB_URL = "jdbc:sqlite:security_services.db";
+    
+       // Database connection method
+    private Connection connect() {
+        Connection conn = null;
+        try {
+            conn = DriverManager.getConnection(DB_URL);
+        } catch (SQLException e) {
+            System.out.println("Connection failed: " + e.getMessage());
+        }
+        return conn;
+    }
+    
     
     public void createNewDatabase() {
         try (Connection conn = DriverManager.getConnection(driverURL)) {
@@ -176,6 +189,134 @@ public class SQLite {
             stmt.execute(sql);
         } catch (Exception ex) {
             System.out.print(ex);
+        }
+    }
+    
+    private void dropTable(String tableName) {
+        String sql = "DROP TABLE IF EXISTS " + tableName;
+        try (Connection conn = connect();
+             Statement stmt = conn.createStatement()) {
+            stmt.execute(sql);
+            System.out.println(tableName + " table dropped.");
+        } catch (SQLException e) {
+            System.out.println("Drop " + tableName + " table failed: " + e.getMessage());
+        }
+    }
+    
+    // Security methods for password hashing
+    private String generateSalt() {
+        SecureRandom random = new SecureRandom();
+        byte[] salt = new byte[16];
+        random.nextBytes(salt);
+        return Base64.getEncoder().encodeToString(salt);
+    }
+    
+    private String hashPassword(String password, String salt) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            md.update(Base64.getDecoder().decode(salt));
+            byte[] hashedPassword = md.digest(password.getBytes("UTF-8"));
+            return Base64.getEncoder().encodeToString(hashedPassword);
+        } catch (Exception e) {
+            throw new RuntimeException("Error hashing password", e);
+        }
+    }
+    
+    // Secure user registration method
+    public boolean registerUser(String username, String password) {
+        // Check if username already exists
+        if (userExists(username)) {
+            return false; // Username already taken
+        }
+        
+        String salt = generateSalt();
+        String hashedPassword = hashPassword(password, salt);
+        
+        String sql = "INSERT INTO users(username, password_hash, salt, role, locked) VALUES(?,?,?,2,0)";
+        
+        try (Connection conn = connect();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, username);
+            pstmt.setString(2, hashedPassword);
+            pstmt.setString(3, salt);
+            pstmt.executeUpdate();
+            
+            // Log successful registration
+            addLogs("NOTICE", username, "New user registered successfully", new Timestamp(System.currentTimeMillis()).toString());
+            return true;
+            
+        } catch (SQLException e) {
+            System.out.println("Registration failed: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    // Check if username exists
+    private boolean userExists(String username) {
+        String sql = "SELECT COUNT(*) FROM users WHERE username = ?";
+        
+        try (Connection conn = connect();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, username);
+            ResultSet rs = pstmt.executeQuery();
+            
+            return rs.getInt(1) > 0;
+            
+        } catch (SQLException e) {
+            System.out.println("Error checking user existence: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    // Secure authentication method
+    public User authenticateUser(String username, String password) {
+        String sql = "SELECT id, username, password_hash, salt, role, locked FROM users WHERE username = ?";
+        
+        try (Connection conn = connect();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, username);
+            ResultSet rs = pstmt.executeQuery();
+            
+            if (rs.next()) {
+                // Check if account is locked
+                if (rs.getInt("locked") == 1) {
+                    addLogs("WARNING", username, "Login attempt on locked account", new Timestamp(System.currentTimeMillis()).toString());
+                    return null; // Account is locked
+                }
+                
+                String storedHash = rs.getString("password_hash");
+                String salt = rs.getString("salt");
+                String providedHash = hashPassword(password, salt);
+                
+                if (storedHash.equals(providedHash)) {
+                    // Password correct - create user object
+                    User user = new User(
+                        rs.getInt("id"),
+                        rs.getString("username"),
+                        "", // Don't store password in User object
+                        rs.getInt("role"),
+                        rs.getInt("locked")
+                    );
+                    
+                    addLogs("NOTICE", username, "Successful login", new Timestamp(System.currentTimeMillis()).toString());
+                    return user;
+                } else {
+                    // Password incorrect
+                    addLogs("WARNING", username, "Failed login attempt - incorrect password", new Timestamp(System.currentTimeMillis()).toString());
+                    return null;
+                }
+            } else {
+                // Username doesn't exist
+                addLogs("WARNING", username, "Failed login attempt - username not found", new Timestamp(System.currentTimeMillis()).toString());
+                return null;
+            }
+            
+        } catch (SQLException e) {
+            System.out.println("Authentication failed: " + e.getMessage());
+            return null;
         }
     }
     

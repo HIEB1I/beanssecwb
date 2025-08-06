@@ -47,7 +47,7 @@ public class Login extends javax.swing.JPanel {
     // Input validation method (fixes security issue #4 - No Input Validation)
     private boolean validateInput() {
         String username = usernameFld.getText().trim();
-        String password = new String(passwordFld.getPassword());
+        String password = passwordFld.getText(); 
         
         // Check if fields are empty
         if (username.isEmpty()) {
@@ -109,7 +109,7 @@ public class Login extends javax.swing.JPanel {
         }
         
         String username = usernameFld.getText().trim();
-        String password = new String(passwordFld.getPassword());
+        String password = passwordFld.getText();
         
         try {
             //  Now we actually check credentials against database (fixes security issue #2)
@@ -142,12 +142,9 @@ public class Login extends javax.swing.JPanel {
             }
             
         } catch (Exception e) {
-            showError("Oops! Something went wrong. Please try again.");
-            logSecurityWarning("Login system error", username);
-        } finally {
-            //Clear password from memory for security
-            java.util.Arrays.fill(passwordFld.getPassword(), '\0');
-        }
+            showError("omething went wrong. Please try again.");
+            logSecurityWarning("Login system error", username);}
+   
     }
     
     // Helper methods for better user experience
