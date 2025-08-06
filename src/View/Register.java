@@ -13,7 +13,9 @@ public class Register extends javax.swing.JPanel {
    public Frame frame;
     //Track password strength for real-time validation (fixes security issue #8 - Weak Password Policy)
     private boolean isPasswordStrong = false;
-    
+    private String actualPassword = "";
+    private String actualConfirmPassword = "";
+
     public Register() {
         initComponents();
         setupSecurityFeatures(); // EDITED: Added security setup
@@ -22,6 +24,7 @@ public class Register extends javax.swing.JPanel {
     // Setup security features for registration
     private void setupSecurityFeatures() {
         // Real time password strength checking (security issue #8)
+        setupPasswordMasking();
         passwordFld.addKeyListener(new KeyListener() {
             @Override
             public void keyReleased(KeyEvent e) {
@@ -67,6 +70,91 @@ public class Register extends javax.swing.JPanel {
         clearFields(); // Start fresh
     }
     
+    private void setupPasswordMasking() {
+    // Setup main password field
+    passwordFld.addKeyListener(new KeyListener() {
+        @Override
+        public void keyPressed(KeyEvent e) {
+            if (e.getKeyCode() == KeyEvent.VK_BACK_SPACE && actualPassword.length() > 0) {
+                actualPassword = actualPassword.substring(0, actualPassword.length() - 1);
+            }
+        }
+        
+        @Override
+        public void keyTyped(KeyEvent e) {
+            char c = e.getKeyChar();
+            if (c == KeyEvent.VK_BACK_SPACE || c == KeyEvent.VK_DELETE) {
+                return;
+            }
+            
+            if (c != KeyEvent.CHAR_UNDEFINED && c >= 32 && c <= 126) {
+                actualPassword += c;
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    String maskedText = "•".repeat(actualPassword.length());
+                    passwordFld.setText(maskedText);
+                    passwordFld.setCaretPosition(maskedText.length());
+                    checkPasswordStrength(); // Update strength indicator
+                    checkPasswordsMatch(); // Check if passwords match
+                });
+                e.consume();
+            }
+        }
+        
+        @Override
+        public void keyReleased(KeyEvent e) {
+            if (e.getKeyCode() == KeyEvent.VK_DELETE || e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    String maskedText = "•".repeat(actualPassword.length());
+                    passwordFld.setText(maskedText);
+                    passwordFld.setCaretPosition(maskedText.length());
+                    checkPasswordStrength();
+                    checkPasswordsMatch();
+                });
+            }
+        }
+    });
+    
+    // Setup confirm password field
+    confpassFld.addKeyListener(new KeyListener() {
+        @Override
+        public void keyPressed(KeyEvent e) {
+            if (e.getKeyCode() == KeyEvent.VK_BACK_SPACE && actualConfirmPassword.length() > 0) {
+                actualConfirmPassword = actualConfirmPassword.substring(0, actualConfirmPassword.length() - 1);
+            }
+        }
+        
+        @Override
+        public void keyTyped(KeyEvent e) {
+            char c = e.getKeyChar();
+            if (c == KeyEvent.VK_BACK_SPACE || c == KeyEvent.VK_DELETE) {
+                return;
+            }
+            
+            if (c != KeyEvent.CHAR_UNDEFINED && c >= 32 && c <= 126) {
+                actualConfirmPassword += c;
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    String maskedText = "•".repeat(actualConfirmPassword.length());
+                    confpassFld.setText(maskedText);
+                    confpassFld.setCaretPosition(maskedText.length());
+                    checkPasswordsMatch();
+                });
+                e.consume();
+            }
+        }
+        
+        @Override
+        public void keyReleased(KeyEvent e) {
+            if (e.getKeyCode() == KeyEvent.VK_DELETE || e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    String maskedText = "•".repeat(actualConfirmPassword.length());
+                    confpassFld.setText(maskedText);
+                    confpassFld.setCaretPosition(maskedText.length());
+                    checkPasswordsMatch();
+                });
+            }
+        }
+    });
+}
     // Username validation (fixes security issue #4 - No Input Validation)
     private boolean validateUsername() {
         String username = usernameFld.getText().trim();
@@ -102,7 +190,7 @@ public class Register extends javax.swing.JPanel {
     
     // Real time password strength validation (fixes security issue #8 - Weak Password Policy)
   private void checkPasswordStrength() {
-        String password = passwordFld.getText(); // Using getText() since it's JTextField
+        String password = actualPassword; // Using getText() since it's JTextField
         
         if (password.length() == 0) {
             passwordFld.setBackground(Color.WHITE); // No color when empty
@@ -130,8 +218,8 @@ public class Register extends javax.swing.JPanel {
     
      // Check if password confirmation matches
     private void checkPasswordsMatch() {
-        String password = passwordFld.getText();
-        String confirmPassword = confpassFld.getText();
+        String password = actualPassword;
+        String confirmPassword = actualConfirmPassword;
         
         if (confirmPassword.length() == 0) {
             confpassFld.setBackground(Color.WHITE); // No color when empty
@@ -149,8 +237,8 @@ public class Register extends javax.swing.JPanel {
     
    // Full password validation (fixes security issue #8)
     private boolean validatePassword() {
-        String password = passwordFld.getText();
-        String confirmPassword = confpassFld.getText();
+        String password = actualPassword;
+        String confirmPassword = actualConfirmPassword;
         
         if (password.isEmpty()) {
             showError("Password is required!");
@@ -216,7 +304,7 @@ public class Register extends javax.swing.JPanel {
         }
         
         String username = usernameFld.getText().trim();
-        String password = passwordFld.getText();
+        String password = actualPassword;
         
         try {
             // Check if username already exists
@@ -247,6 +335,9 @@ public class Register extends javax.swing.JPanel {
         passwordFld.setText("");
         confpassFld.setText("");
         
+         actualPassword = "";
+    actualConfirmPassword = "";
+    
         // Reset colors
         usernameFld.setBackground(Color.WHITE);
         passwordFld.setBackground(Color.WHITE);

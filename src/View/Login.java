@@ -13,40 +13,108 @@ public class Login extends javax.swing.JPanel {
     // Added login attempt tracking for security issue #7 (Account Lockout)
     private int loginAttempts = 0;
     private static final int MAX_ATTEMPTS = 3; // Users get 3 attempts max
-    
+    private String actualPassword = "";
+    private boolean isPasswordFieldActive = false;
+
     public Login() {
         initComponents();
         setupSecurityFeatures(); // Added security setup
     }
 
      // New method to setup security features
+
     private void setupSecurityFeatures() {
-       
-        
-        // Add Enter key support for better user experience
-        KeyListener enterKeyListener = new KeyListener() {
-            @Override
-            public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
-                    performLogin(); // Call our secure login method
+    // Setup password masking
+    setupPasswordMasking();
+    
+    // Add Enter key support
+    KeyListener enterKeyListener = new KeyListener() {
+        @Override
+        public void keyPressed(KeyEvent e) {
+            if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                performLogin();
+            }
+        }
+        @Override
+        public void keyReleased(KeyEvent e) {}
+        @Override
+        public void keyTyped(KeyEvent e) {}
+    };
+    
+    usernameFld.addKeyListener(enterKeyListener);
+    passwordFld.addKeyListener(enterKeyListener);
+    
+    clearFields();
+}
+    
+    
+private void setupPasswordMasking() {
+    passwordFld.addKeyListener(new KeyListener() {
+        @Override
+        public void keyPressed(KeyEvent e) {
+            if (e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
+                // Handle backspace
+                if (actualPassword.length() > 0) {
+                    actualPassword = actualPassword.substring(0, actualPassword.length() - 1);
                 }
             }
-            @Override
-            public void keyReleased(KeyEvent e) {}
-            @Override
-            public void keyTyped(KeyEvent e) {}
-        };
+        }
         
-        usernameFld.addKeyListener(enterKeyListener);
-        passwordFld.addKeyListener(enterKeyListener);
+        @Override
+        public void keyTyped(KeyEvent e) {
+            char c = e.getKeyChar();
+            
+            if (c == KeyEvent.VK_BACK_SPACE || c == KeyEvent.VK_DELETE) {
+                return;
+            }
+            
+            if (c != KeyEvent.CHAR_UNDEFINED && c >= 32 && c <= 126) {
+                actualPassword += c;
+                
+                // Replace the visible text with dots
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    String maskedText = "•".repeat(actualPassword.length());
+                    passwordFld.setText(maskedText);
+                    passwordFld.setCaretPosition(maskedText.length());
+                });
+                
+            
+                e.consume();
+            }
+        }
         
-        clearFields(); // Start with clean fields
-    }
+        @Override
+        public void keyReleased(KeyEvent e) {
+            // Handle special cases for delete/backspace
+            if (e.getKeyCode() == KeyEvent.VK_DELETE || e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    String maskedText = "•".repeat(actualPassword.length());
+                    passwordFld.setText(maskedText);
+                    passwordFld.setCaretPosition(maskedText.length());
+                });
+            }
+        }
+    });
     
+ 
+    passwordFld.addFocusListener(new java.awt.event.FocusListener() {
+        @Override
+        public void focusGained(java.awt.event.FocusEvent e) {
+            isPasswordFieldActive = true;
+        }
+        
+        @Override
+        public void focusLost(java.awt.event.FocusEvent e) {
+            isPasswordFieldActive = false;
+        }
+    });
+}
+
+
     // Input validation method (fixes security issue #4 - No Input Validation)
     private boolean validateInput() {
         String username = usernameFld.getText().trim();
-        String password = passwordFld.getText(); 
+        String password = actualPassword; 
         
         // Check if fields are empty
         if (username.isEmpty()) {
@@ -61,7 +129,7 @@ public class Login extends javax.swing.JPanel {
             return false;
         }
         
-        // EDITED: Check username format (basic security check)
+        // heck username format (basic security check)
         if (!username.matches("^[a-zA-Z0-9_]{3,20}$")) {
             showError("Username should be 3-20 characters with only letters, numbers, and underscores.");
             usernameFld.requestFocus();
@@ -108,7 +176,7 @@ public class Login extends javax.swing.JPanel {
         }
         
         String username = usernameFld.getText().trim();
-        String password = passwordFld.getText();
+        String password = actualPassword;
         
         try {
             //  Now we actually check credentials against database (fixes security issue #2)
@@ -150,8 +218,11 @@ public class Login extends javax.swing.JPanel {
     private void clearFields() {
         usernameFld.setText("");
         passwordFld.setText("");
+        actualPassword = ""; 
     }
     
+   
+
     private void showError(String message) {
         JOptionPane.showMessageDialog(this, message, "Login Error", JOptionPane.ERROR_MESSAGE);
     }
