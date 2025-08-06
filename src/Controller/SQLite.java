@@ -253,7 +253,7 @@ public class SQLite {
     }
     
     // Check if username exists
-    private boolean userExists(String username) {
+    public boolean userExists(String username) {
         String sql = "SELECT COUNT(*) FROM users WHERE username = ?";
         
         try (Connection conn = connect();

@@ -101,9 +101,8 @@ public class Register extends javax.swing.JPanel {
     }
     
     // Real time password strength validation (fixes security issue #8 - Weak Password Policy)
-    private void checkPasswordStrength() {
-        char[] passwordChars = passwordFld.getPassword();
-        String password = new String(passwordChars);
+  private void checkPasswordStrength() {
+        String password = passwordFld.getText(); // Using getText() since it's JTextField
         
         if (password.length() == 0) {
             passwordFld.setBackground(Color.WHITE); // No color when empty
@@ -126,52 +125,44 @@ public class Register extends javax.swing.JPanel {
         } else if (password.length() > 0) {
             passwordFld.setBackground(new Color(255, 200, 200)); // Red = weak password
         }
-        
-        //  Clear password from memory for security
-        Arrays.fill(passwordChars, '\0');
     }
     
-    // Check if password confirmation matches
+    
+     // Check if password confirmation matches
     private void checkPasswordsMatch() {
-        char[] passwordChars = passwordFld.getPassword();
-        char[] confirmChars = confpassFld.getPassword();
+        String password = passwordFld.getText();
+        String confirmPassword = confpassFld.getText();
         
-        if (confirmChars.length == 0) {
+        if (confirmPassword.length() == 0) {
             confpassFld.setBackground(Color.WHITE); // No color when empty
             return;
         }
         
-        boolean matches = Arrays.equals(passwordChars, confirmChars);
+        boolean matches = password.equals(confirmPassword);
         
-        if (matches && confirmChars.length > 0) {
+        if (matches && confirmPassword.length() > 0) {
             confpassFld.setBackground(new Color(200, 255, 200)); // Green = passwords match! 
         } else {
             confpassFld.setBackground(new Color(255, 200, 200)); // Red = passwords don't match
         }
-        
-        // Clear passwords from memory
-        Arrays.fill(passwordChars, '\0');
-        Arrays.fill(confirmChars, '\0');
     }
     
-    // Full password validation (fixes security issue #8)
+   // Full password validation (fixes security issue #8)
     private boolean validatePassword() {
-        char[] passwordChars = passwordFld.getPassword();
-        char[] confirmChars = confpassFld.getPassword();
+        String password = passwordFld.getText();
+        String confirmPassword = confpassFld.getText();
         
-        if (passwordChars.length == 0) {
+        if (password.isEmpty()) {
             showError("Password is required!");
             passwordFld.requestFocus();
             return false;
         }
         
-        if (confirmChars.length == 0) {
+        if (confirmPassword.isEmpty()) {
             showError("Please confirm your password.");
             confpassFld.requestFocus();
             return false;
         }
-        
-        String password = new String(passwordChars);
         
         // Check if password meets strength requirements (security issue #8)
         if (!isPasswordStrong) {
@@ -186,7 +177,7 @@ public class Register extends javax.swing.JPanel {
         }
         
         // Make sure passwords match
-        if (!Arrays.equals(passwordChars, confirmChars)) {
+        if (!password.equals(confirmPassword)) {
             showError("Passwords don't match! Please check both fields.");
             confpassFld.requestFocus();
             return false;
@@ -218,41 +209,37 @@ public class Register extends javax.swing.JPanel {
         return false;
     }
     
-    // Main registration method with proper validation
+     // Main registration method with proper validation
     private void performRegistration() {
         if (!validateUsername() || !validatePassword()) {
             return; // Don't proceed if validation fails
         }
         
         String username = usernameFld.getText().trim();
-        char[] passwordChars = passwordFld.getPassword();
-        String password = new String(passwordChars);
+        String password = passwordFld.getText();
         
         try {
-            //  Attempt secure registration
-            boolean registrationSuccess = frame.main.sqlite.registerUser(username, password);
-            
-            if (registrationSuccess) {
-                // SUCCESS! New user created
-                clearFields();
-                showSuccess("Welcome to SECURITY Svcs! 🎉\nYou can now login with your new account.");
-                frame.loginNav(); // Go back to login page
-            } else {
-                // FAILED! Username might already exist
-                showError("Registration failed! Username might already be taken.");
+            // Check if username already exists
+            if (frame.main.sqlite.userExists(username)) {
+                showError("Username already exists! Please choose a different one.");
                 usernameFld.requestFocus();
+                return;
             }
+            
+            // Attempt secure registration
+            frame.registerAction(username, password, password);
+            
+            // SUCCESS! New user created
+            clearFields();
+            showSuccess("Welcome to SECURITY Svcs! 🎉\nYou can now login with your new account.");
+            frame.loginNav(); // Go back to login page
             
         } catch (Exception e) {
             showError("Oops! Something went wrong during registration. Please try again.");
             logSecurityWarning("Registration system error", username);
-        } finally {
-            // lear passwords from memory for security
-            Arrays.fill(passwordChars, '\0');
-            Arrays.fill(passwordFld.getPassword(), '\0');
-            Arrays.fill(confpassFld.getPassword(), '\0');
         }
     }
+    
     
     // Helper methods
     private void clearFields() {

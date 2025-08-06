@@ -21,8 +21,7 @@ public class Login extends javax.swing.JPanel {
 
      // New method to setup security features
     private void setupSecurityFeatures() {
-        // Make password field secure (fixes security issue #5 - Unmasked password login field)
-        passwordFld.setEchoChar('*'); // This hides what user types with asterisks
+       
         
         // Add Enter key support for better user experience
         KeyListener enterKeyListener = new KeyListener() {
