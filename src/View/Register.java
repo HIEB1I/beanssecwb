@@ -1,12 +1,291 @@
 
 package View;
 
+import javax.swing.JOptionPane;
+import javax.swing.JPasswordField; 
+import java.awt.Color;
+import java.awt.event.KeyEvent;
+import java.awt.event.KeyListener;
+import java.util.Arrays;
+
 public class Register extends javax.swing.JPanel {
 
-    public Frame frame;
+   public Frame frame;
+    //Track password strength for real-time validation (fixes security issue #8 - Weak Password Policy)
+    private boolean isPasswordStrong = false;
     
     public Register() {
         initComponents();
+        setupSecurityFeatures(); // EDITED: Added security setup
+    }
+    
+    // Setup security features for registration
+    private void setupSecurityFeatures() {
+        // Real time password strength checking (security issue #8)
+        passwordFld.addKeyListener(new KeyListener() {
+            @Override
+            public void keyReleased(KeyEvent e) {
+                checkPasswordStrength(); // Check if password is strong enough
+                checkPasswordsMatch(); // Check if passwords match
+            }
+            @Override
+            public void keyPressed(KeyEvent e) {}
+            @Override
+            public void keyTyped(KeyEvent e) {}
+        });
+        
+        //Check password confirmation 
+        confpassFld.addKeyListener(new KeyListener() {
+            @Override
+            public void keyReleased(KeyEvent e) {
+                checkPasswordsMatch(); // Make sure passwords match
+            }
+            @Override
+            public void keyPressed(KeyEvent e) {}
+            @Override
+            public void keyTyped(KeyEvent e) {}
+        });
+        
+        // Add Enter key support
+        KeyListener enterKeyListener = new KeyListener() {
+            @Override
+            public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    performRegistration();
+                }
+            }
+            @Override
+            public void keyReleased(KeyEvent e) {}
+            @Override
+            public void keyTyped(KeyEvent e) {}
+        };
+        
+        usernameFld.addKeyListener(enterKeyListener);
+        passwordFld.addKeyListener(enterKeyListener);
+        confpassFld.addKeyListener(enterKeyListener);
+        
+        clearFields(); // Start fresh
+    }
+    
+    // Username validation (fixes security issue #4 - No Input Validation)
+    private boolean validateUsername() {
+        String username = usernameFld.getText().trim();
+        
+        if (username.isEmpty()) {
+            showError("Username is required! Can't register without one.");
+            usernameFld.requestFocus();
+            return false;
+        }
+        
+        if (username.length() < 3 || username.length() > 20) {
+            showError("Username must be 3-20 characters long.");
+            usernameFld.requestFocus();
+            return false;
+        }
+        
+        // Only allow safe characters
+        if (!username.matches("^[a-zA-Z0-9_]+$")) {
+            showError("Username can only have letters, numbers, and underscores (_).");
+            usernameFld.requestFocus();
+            return false;
+        }
+        
+        // Check for hacking attempts
+        if (containsDangerousChars(username)) {
+            showError("Nice try! Invalid characters detected. 🕵️");
+            logSecurityWarning("Possible injection attempt in registration", username);
+            return false;
+        }
+        
+        return true;
+    }
+    
+    // Real time password strength validation (fixes security issue #8 - Weak Password Policy)
+    private void checkPasswordStrength() {
+        char[] passwordChars = passwordFld.getPassword();
+        String password = new String(passwordChars);
+        
+        if (password.length() == 0) {
+            passwordFld.setBackground(Color.WHITE); // No color when empty
+            isPasswordStrong = false;
+            return;
+        }
+        
+        // Check all password requirements (uppercase, lowercase, digit, special character)
+        boolean hasUpper = password.matches(".*[A-Z].*");           // Has uppercase letter
+        boolean hasLower = password.matches(".*[a-z].*");           // Has lowercase letter  
+        boolean hasDigit = password.matches(".*[0-9].*");           // Has number
+        boolean hasSpecial = password.matches(".*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>\\/?].*"); // Has special character
+        boolean isLongEnough = password.length() >= 8;              // At least 8 characters
+        
+        // Password is strong only if it has ALL requirements
+        isPasswordStrong = hasUpper && hasLower && hasDigit && hasSpecial && isLongEnough;
+        
+        if (isPasswordStrong) {
+            passwordFld.setBackground(new Color(200, 255, 200)); // Green = good password! 
+        } else if (password.length() > 0) {
+            passwordFld.setBackground(new Color(255, 200, 200)); // Red = weak password
+        }
+        
+        //  Clear password from memory for security
+        Arrays.fill(passwordChars, '\0');
+    }
+    
+    // Check if password confirmation matches
+    private void checkPasswordsMatch() {
+        char[] passwordChars = passwordFld.getPassword();
+        char[] confirmChars = confpassFld.getPassword();
+        
+        if (confirmChars.length == 0) {
+            confpassFld.setBackground(Color.WHITE); // No color when empty
+            return;
+        }
+        
+        boolean matches = Arrays.equals(passwordChars, confirmChars);
+        
+        if (matches && confirmChars.length > 0) {
+            confpassFld.setBackground(new Color(200, 255, 200)); // Green = passwords match! 
+        } else {
+            confpassFld.setBackground(new Color(255, 200, 200)); // Red = passwords don't match
+        }
+        
+        // Clear passwords from memory
+        Arrays.fill(passwordChars, '\0');
+        Arrays.fill(confirmChars, '\0');
+    }
+    
+    // Full password validation (fixes security issue #8)
+    private boolean validatePassword() {
+        char[] passwordChars = passwordFld.getPassword();
+        char[] confirmChars = confpassFld.getPassword();
+        
+        if (passwordChars.length == 0) {
+            showError("Password is required!");
+            passwordFld.requestFocus();
+            return false;
+        }
+        
+        if (confirmChars.length == 0) {
+            showError("Please confirm your password.");
+            confpassFld.requestFocus();
+            return false;
+        }
+        
+        String password = new String(passwordChars);
+        
+        // Check if password meets strength requirements (security issue #8)
+        if (!isPasswordStrong) {
+            showError("Password is too weak! It needs:\n" +
+                     "• At least 8 characters\n" +
+                     "• One UPPERCASE letter (A-Z)\n" +
+                     "• One lowercase letter (a-z)\n" +
+                     "• One number (0-9)\n" +
+                     "• One special character (!@#$%^&*...)");
+            passwordFld.requestFocus();
+            return false;
+        }
+        
+        // Make sure passwords match
+        if (!Arrays.equals(passwordChars, confirmChars)) {
+            showError("Passwords don't match! Please check both fields.");
+            confpassFld.requestFocus();
+            return false;
+        }
+        
+        // Check for hacking attempts in password
+        if (containsDangerousChars(password)) {
+            showError("Invalid characters in password. Please use safe characters only.");
+            logSecurityWarning("Possible injection attempt in password", usernameFld.getText().trim());
+            return false;
+        }
+        
+        return true;
+    }
+    
+    // Detect potential hacking attempts
+    private boolean containsDangerousChars(String input) {
+        if (input == null) return false;
+        
+        // List of suspicious patterns hackers might use
+        String[] dangerousPatterns = {"'", "\"", ";", "--", "/*", "*/", "DROP", "DELETE", "INSERT", "UPDATE", "SELECT"};
+        String upperInput = input.toUpperCase();
+        
+        for (String pattern : dangerousPatterns) {
+            if (upperInput.contains(pattern.toUpperCase())) {
+                return true; // Found something fishy!
+            }
+        }
+        return false;
+    }
+    
+    // Main registration method with proper validation
+    private void performRegistration() {
+        if (!validateUsername() || !validatePassword()) {
+            return; // Don't proceed if validation fails
+        }
+        
+        String username = usernameFld.getText().trim();
+        char[] passwordChars = passwordFld.getPassword();
+        String password = new String(passwordChars);
+        
+        try {
+            //  Attempt secure registration
+            boolean registrationSuccess = frame.main.sqlite.registerUser(username, password);
+            
+            if (registrationSuccess) {
+                // SUCCESS! New user created
+                clearFields();
+                showSuccess("Welcome to SECURITY Svcs! 🎉\nYou can now login with your new account.");
+                frame.loginNav(); // Go back to login page
+            } else {
+                // FAILED! Username might already exist
+                showError("Registration failed! Username might already be taken.");
+                usernameFld.requestFocus();
+            }
+            
+        } catch (Exception e) {
+            showError("Oops! Something went wrong during registration. Please try again.");
+            logSecurityWarning("Registration system error", username);
+        } finally {
+            // lear passwords from memory for security
+            Arrays.fill(passwordChars, '\0');
+            Arrays.fill(passwordFld.getPassword(), '\0');
+            Arrays.fill(confpassFld.getPassword(), '\0');
+        }
+    }
+    
+    // Helper methods
+    private void clearFields() {
+        usernameFld.setText("");
+        passwordFld.setText("");
+        confpassFld.setText("");
+        
+        // Reset colors
+        usernameFld.setBackground(Color.WHITE);
+        passwordFld.setBackground(Color.WHITE);
+        confpassFld.setBackground(Color.WHITE);
+        
+        isPasswordStrong = false;
+    }
+    
+    private void showError(String message) {
+        JOptionPane.showMessageDialog(this, message, "Registration Error", JOptionPane.ERROR_MESSAGE);
+    }
+    
+    private void showSuccess(String message) {
+        JOptionPane.showMessageDialog(this, message, "Registration Success", JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    // EDITED: Security logging
+    private void logSecurityWarning(String event, String username) {
+        try {
+            if (frame != null && frame.main != null && frame.main.sqlite != null) {
+                java.sql.Timestamp timestamp = new java.sql.Timestamp(new java.util.Date().getTime());
+                frame.main.sqlite.addLogs("WARNING", username != null ? username : "UNKNOWN", event, timestamp.toString());
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to log security warning: " + e.getMessage());
+        }
     }
 
     @SuppressWarnings("unchecked")

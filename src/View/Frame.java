@@ -1,13 +1,22 @@
 package View;
 
 import Controller.Main;
+import Model.User;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Dimension;
+import java.sql.Timestamp;
+import java.util.Date;
+import javax.swing.JOptionPane;
 import javax.swing.WindowConstants;
 
 public class Frame extends javax.swing.JFrame {
 
+      // Added user session management (fixes security issues #2 and #3)
+    private User currentUser = null; // Keeps track of who's logged in
+    private long sessionStartTime = 0; // When did they log in?
+    private static final long SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes session timeout
+    
     public Frame() {
         initComponents();
     }
@@ -180,27 +189,39 @@ public class Frame extends javax.swing.JFrame {
     }// </editor-fold>//GEN-END:initComponents
 
     private void adminBtnActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_adminBtnActionPerformed
-        adminHomePnl.showPnl("home");
-        contentView.show(Content, "adminHomePnl");
+        if (checkSessionAndAuthorization(5)) { // Only Admins (role 5) can access
+            adminHomePnl.showPnl("home");
+            contentView.show(Content, "adminHomePnl");
+            logSecurityEvent("NOTICE", currentUser.getUsername(), "Accessed Admin Home");
+        }
     }//GEN-LAST:event_adminBtnActionPerformed
 
     private void managerBtnActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_managerBtnActionPerformed
-        managerHomePnl.showPnl("home");
-        contentView.show(Content, "managerHomePnl");
+       if (checkSessionAndAuthorization(4)) { // Managers (role 4) and above can access
+            managerHomePnl.showPnl("home");
+            contentView.show(Content, "managerHomePnl");
+            logSecurityEvent("NOTICE", currentUser.getUsername(), "Accessed Manager Home");
+        }
     }//GEN-LAST:event_managerBtnActionPerformed
 
     private void staffBtnActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_staffBtnActionPerformed
-        staffHomePnl.showPnl("home");
-        contentView.show(Content, "staffHomePnl");
+        if (checkSessionAndAuthorization(3)) { // Staff (role 3) and above can access
+            staffHomePnl.showPnl("home");
+            contentView.show(Content, "staffHomePnl");
+            logSecurityEvent("NOTICE", currentUser.getUsername(), "Accessed Staff Home");
+        }
     }//GEN-LAST:event_staffBtnActionPerformed
 
     private void clientBtnActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_clientBtnActionPerformed
-        clientHomePnl.showPnl("home");
-        contentView.show(Content, "clientHomePnl");
+         if (checkSessionAndAuthorization(2)) { // Clients (role 2) and above can access
+            clientHomePnl.showPnl("home");
+            contentView.show(Content, "clientHomePnl");
+            logSecurityEvent("NOTICE", currentUser.getUsername(), "Accessed Client Home");
+        }
     }//GEN-LAST:event_clientBtnActionPerformed
 
     private void logoutBtnActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_logoutBtnActionPerformed
-        frameView.show(Container, "loginPnl");
+        performLogout(); 
     }//GEN-LAST:event_logoutBtnActionPerformed
 
     public Main main;
@@ -241,14 +262,160 @@ public class Frame extends javax.swing.JFrame {
         Content.add(staffHomePnl, "staffHomePnl");
         Content.add(clientHomePnl, "clientHomePnl");
         
+         //Initialize buttons properly based on user permissions
+        updateNavigationButtons();
+        
         this.setVisible(true);
     }
     
-    public void mainNav(){
-        frameView.show(Container, "homePnl");
+     
+    // Sets the current user and starts their session - called after successful login
+    public void setCurrentUser(User user) {
+        this.currentUser = user;
+        this.sessionStartTime = System.currentTimeMillis();
+        updateNavigationButtons(); // Show/hide buttons based on user role
+        logSecurityEvent("NOTICE", user.getUsername(), "User session started");
+    }
+    
+    // Gets who's currently logged in
+    public User getCurrentUser() {
+        return currentUser;
+    }
+    
+    // The brain of our security system - checks if user can access something
+    private boolean checkSessionAndAuthorization(int requiredRole) {
+        // First, is anyone even logged in?
+        if (currentUser == null) {
+            showUnauthorizedMessage("You need to login first! 🔒");
+            loginNav();
+            return false;
+        }
+        
+        // Has their session expired? (Security timeout)
+        if (System.currentTimeMillis() - sessionStartTime > SESSION_TIMEOUT_MS) {
+            showSessionExpiredMessage();
+            performLogout();
+            return false;
+        }
+        
+        // Do they have the right permissions? (Authorization check)
+        if (currentUser.getRole() < requiredRole) {
+            showUnauthorizedMessage("Access denied! You don't have permission for this area. 🚫");
+            logSecurityEvent("WARNING", currentUser.getUsername(), 
+                "Tried to access role " + requiredRole + " area but only has role " + currentUser.getRole());
+            return false;
+        }
+        
+        return true; // All checks passed!
+    }
+    
+    // Updates which buttons the user can see based on their role (fixes security issue #3)
+    private void updateNavigationButtons() {
+        if (currentUser == null) {
+            // Nobody logged in - disable everything
+            adminBtn.setEnabled(false);
+            managerBtn.setEnabled(false);
+            staffBtn.setEnabled(false);
+            clientBtn.setEnabled(false);
+            logoutBtn.setEnabled(false);
+        } else {
+            // Show buttons based on user's role level
+            int userRole = currentUser.getRole();
+            
+            adminBtn.setEnabled(userRole >= 5);     // Only Admins see Admin button
+            managerBtn.setEnabled(userRole >= 4);   // Managers and Admins see Manager button
+            staffBtn.setEnabled(userRole >= 3);     // Staff, Managers, and Admins see Staff button
+            clientBtn.setEnabled(userRole >= 2);    // Everyone (except disabled) sees Client button
+            logoutBtn.setEnabled(true);             // Everyone can logout
+            
+            // Show who's logged in
+            jLabel1.setText("Welcome, " + currentUser.getUsername() + "!");
+        }
+    }
+    
+    // Smart navigation - takes user to their appropriate home page (fixes security issue #3)
+    public void navigateToUserHome(int userRole) {
+        switch (userRole) {
+            case 5: // Admin - goes to Admin home
+                adminHomePnl.showPnl("home");
+                contentView.show(Content, "adminHomePnl");
+                break;
+            case 4: // Manager - goes to Manager home
+                managerHomePnl.showPnl("home");
+                contentView.show(Content, "managerHomePnl");
+                break;
+            case 3: // Staff - goes to Staff home
+                staffHomePnl.showPnl("home");
+                contentView.show(Content, "staffHomePnl");
+                break;
+            case 2: // Client - goes to Client home
+                clientHomePnl.showPnl("home");
+                contentView.show(Content, "clientHomePnl");
+                break;
+            default:
+                // Disabled or invalid role - kick them out
+                showUnauthorizedMessage("Your account is disabled or has invalid permissions.");
+                performLogout();
+                return;
+        }
+        
+        frameView.show(Container, "homePnl"); // Show the main application
+    }
+    
+    //Secure logout - cleans up everything properly
+    private void performLogout() {
+        if (currentUser != null) {
+            logSecurityEvent("NOTICE", currentUser.getUsername(), "User logged out");
+            currentUser = null; // Clear current user
+        }
+        
+        sessionStartTime = 0; // Reset session time
+        updateNavigationButtons(); // Hide all buttons
+        jLabel1.setText("SECURITY Svcs"); // Reset welcome message
+        
+        frameView.show(Container, "loginPnl"); // Go back to login page
+    }
+    
+    // Helper methods for user messages
+    private void showUnauthorizedMessage(String message) {
+        JOptionPane.showMessageDialog(this, message, "Access Denied", JOptionPane.WARNING_MESSAGE);
+    }
+    
+    private void showSessionExpiredMessage() {
+        JOptionPane.showMessageDialog(this, 
+            "Your session expired for security reasons. Please login again.", 
+            "Session Expired", JOptionPane.WARNING_MESSAGE);
+    }
+    
+    // Security logging - keeps track of what users do
+    private void logSecurityEvent(String event, String username, String description) {
+        try {
+            if (main != null && main.sqlite != null) {
+                Timestamp timestamp = new Timestamp(new Date().getTime());
+                main.sqlite.addLogs(event, username, description, timestamp.toString());
+            }
+        } catch (Exception e) {
+            System.err.println("Failed to log security event: " + e.getMessage());
+        }
+    }
+    
+    // Navigation methods (updated for security)
+    
+    
+public void mainNav(){
+        if (currentUser != null) {
+            navigateToUserHome(currentUser.getRole()); // Go to appropriate home
+        } else {
+            loginNav(); // Not logged in - go to login
+        }
     }
     
     public void loginNav(){
+        // Clear any existing session when going to login
+        currentUser = null;
+        sessionStartTime = 0;
+        updateNavigationButtons();
+        jLabel1.setText("SECURITY Svcs");
         frameView.show(Container, "loginPnl");
     }
     
@@ -273,3 +440,5 @@ public class Frame extends javax.swing.JFrame {
     private javax.swing.JButton staffBtn;
     // End of variables declaration//GEN-END:variables
 }
+
+
